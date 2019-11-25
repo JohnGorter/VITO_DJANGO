@@ -237,6 +237,9 @@ class CustomAuthToken(ObtainAuthToken):
             'email': user.email
         })
 ```
+
+---
+### Generating Tokens using custom View (2)
 And in your urls.py
 ```
 urlpatterns += [
@@ -289,9 +292,6 @@ If successfully authenticated, SessionAuthentication provides the following cred
 
 Unauthenticated responses that are denied permission will result in an HTTP 403 Forbidden response
 
-If you're using an AJAX style API with SessionAuthentication, you'll need to make sure you include a valid CSRF token for any "unsafe" HTTP method calls, such as PUT, PATCH, POST or DELETE requests
-
-
 ---
 ### Custom authentication
 To implement a custom authentication scheme
@@ -300,6 +300,8 @@ To implement a custom authentication scheme
 
 The method should return a two-tuple of (user, auth) if authentication succeeds, or None otherwise
 
+---
+### Custom authentication (2)
 
 Typically the approach you should take is:
 - if authentication is not attempted, return None, any other authentication schemes also in use will still be checked.

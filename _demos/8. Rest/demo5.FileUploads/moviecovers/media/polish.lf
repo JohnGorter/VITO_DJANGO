@@ -1,0 +1,244 @@
+polish {
+
+	port Success child("apply_polish").port("success")
+	port Error child("prepare").port("error")
+		or child("apply_polish").port("error")
+		or child("check_error").port("error")
+    or child("apply_force").port("error")
+
+	resultType {
+		string error_cause;
+	}
+
+	parameterType {
+		{
+			[16]float pose;
+			[]float joint_angles;
+		} start_pose;
+		float width_value;
+		float loop_interval_value;
+		float speed_ratio;
+		float force_value;
+		float duration_value;
+		float speed;
+	}
+
+	clientData {
+		type : "app";
+		name : "polish";
+		color : "#B6E591";
+		requiredParameters: [{source: speed; localParameter: speed;}];
+		image : @{
+			<svg>
+				<use xlink:href="bundles/polish/logo.svg#icon"></use>
+			</svg>
+		}@;
+		contextMenu : @{
+			<step id="tab_start_position" name="start position" class="flex-column">
+				<step
+					id="set_start_pose"
+					name="Start Postion"
+					label="Set the starting position of the robot's motion."
+				>
+					<robot-pose params="
+						pose: parameter('start_pose'),
+						noSaveStep: true,
+						relatedPoses: {
+							'start_pose': parameter('start_pose')
+						},
+						step: step,
+						path: path
+					"></robot-pose>
+				</step>
+			</step>
+			<step id="tab_width" name="width" class="flex-column">
+				<step id="set_width" class="flex-column" label="Set the width of the polishing trajectory.">
+					<h2 data-bind="text: step.label"></h2>
+					<linear-slider params="
+						value: parameter('width_value'),
+						min: 5,
+						max: 200,
+						increment: 5,
+						initial: 30,
+						unit: 'mm',
+						step: step
+					"/>
+				</step>
+			</step>
+			<step id="tab_loop_interval" name="loop interval" class="flex-column">
+				<step id="set_loop_interval" class="flex-column" label="Set the distance between the loops of the polishing trajectory.">
+					<h2 data-bind="text: step.label"></h2>
+					<linear-slider params="
+						value: parameter('loop_interval_value'),
+						min: 5,
+						max: 50,
+						increment: 5,
+						initial: 5,
+						unit: 'mm',
+						step: step
+					"/>
+				</step>
+			</step>
+			<step id="tab_speed" name="speed" class="flex-column">
+				<step id="set_speed_ratio" class="flex-column" label="Set the speed of the robot's polishing motion.">
+					<h2 data-bind="text: step.label"></h2>
+					<linear-slider params="
+						value: parameter('speed_ratio'),
+						min: 5,
+						max: 100,
+						increment: 5,
+						initial: 30,
+						unit: '%',
+						step: step
+					"/>
+				</step>
+			</step>
+			<step id="tab_force" name="force" class="flex-column">
+				<step id="set_force" class="flex-column" label="Set the force of the robot's polishing motion.">
+					<h2 data-bind="text: step.label"></h2>
+					<linear-slider params="
+						value: parameter('force_value'),
+						min: 1,
+						max: 50,
+						initial: 10,
+						unit: 'N',
+						step: step
+					"/>
+				</step>
+			</step>
+			<step id="tab_duration" name="duration" class="flex-column">
+				<step id="set_duration_value" class="flex-column" label="Set the duration of the robot's polishing motion.">
+					<h2 data-bind="text: step.label"></h2>
+					<arc-slider params="
+						value: parameter('duration_value'),
+						fullValue: 60,
+						unit: 's',
+						step: step
+					"/>
+				</step>
+			</step>
+		}@;
+	}
+
+	--> compute_parameters {
+		port done true -> prepare
+
+		entry @{
+			result = {}
+
+			result.move_to_start_pose = {}
+			result.move_to_start_pose[1] = {
+				cartesian_velocity_factor = 0.2*parameter.speed,
+				cartesian_acceleration_factor = 0.4*parameter.speed,
+				cartesian_deceleration_factor = 0.4*parameter.speed,
+				point2point = true,
+				pose = { pose = parameter.start_pose.pose },
+				q3 = parameter.start_pose.joint_angles[3] or 0.0
+      			}
+
+			setResult(result)
+		}@
+
+		parameterType {
+			{
+				[16]float pose;
+				[]float joint_angles;
+			} start_pose;
+			float speed;
+		}
+
+		resultType {
+			[]{
+				float cartesian_velocity_factor;
+				float cartesian_acceleration_factor;
+				float cartesian_deceleration_factor;
+				bool point2point;
+				{
+					[16]float pose;
+				} pose;
+				float q3;
+			} move_to_start_pose;
+		}
+	} where {
+		start_pose: parameter.start_pose;
+		speed: parameter.speed;
+	}
+
+	prepare <- move_via_with_move_configuration {
+		port success -> apply_polish
+	} where {
+		poses: child("compute_parameters").result.move_to_start_pose;
+	}
+
+  barrier polish {
+    -> apply_polish
+    -> apply_force
+  }
+
+  apply_force <- apply_force {
+  } where {
+    F_d: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]; -- you need to fill this
+    duration: parameter.duration_value;
+    safety_distance_x: 0.5;
+    safety_distance_y: 0.5;
+    force_tolerance: 0.1;
+  }
+
+	apply_polish <- move_velocity {
+	} where {
+
+		profiles: [
+			{
+				type:0;
+				a_0: 0.01*(0.2*parameter.loop_interval_value)*(0.01*parameter.speed_ratio);
+				a_n: [0.0, 0.0, 0.0, 0.0, 0.0];
+				b_n: [-0.04*(0.2*parameter.loop_interval_value)*(0.01*parameter.speed_ratio), 0.0, 0.0, 0.0, 0.0];
+				T_fourier: 1.0/(0.01*parameter.speed_ratio);
+			},
+			{
+				type: 0;
+				a_0: 0.0;
+				a_n: [-0.1*(1.0/32.0*parameter.width_value)*(0.01*parameter.speed_ratio), 0.0, 0.0, 0.0, 0.0];
+				b_n: [0.0, 0.0, 0.0, 0.0, 0.0];
+				T_fourier: 1.0/(0.01*parameter.speed_ratio);
+			},
+			{type: 0; a_0: 0.0; a_n: [0.0, 0.0, 0.0, 0.0, 0.0];  b_n: [0.0, 0.0, 0.0, 0.0, 0.0]; T_fourier: 1.0;},
+			{type: 0; a_0: 0.0; a_n: [0.0, 0.0, 0.0, 0.0, 0.0];  b_n: [0.0, 0.0, 0.0, 0.0, 0.0]; T_fourier: 1.0;},
+			{type: 0; a_0: 0.0; a_n: [0.0, 0.0, 0.0, 0.0, 0.0];  b_n: [0.0, 0.0, 0.0, 0.0, 0.0]; T_fourier: 1.0;},
+			{type: 0; a_0: 0.0; a_n: [0.0, 0.0, 0.0, 0.0, 0.0];  b_n: [0.0, 0.0, 0.0, 0.0, 0.0]; T_fourier: 1.0;}
+		];
+    controller_mode: 3;
+		duration: parameter.duration_value;
+		frame_selection: 1;
+		safety_distance_x: 0.5;
+		safety_distance_y: 0.5;
+	}
+
+
+	reset <- wait_until_reset_collision {
+	}
+
+
+	action child("prepare").port("error") @{
+		setResult({error_cause = child("prepare").result.error_cause})
+	}@
+	action child("apply_force").port("error") @{
+		setResult({error_cause = child("apply_force").result.error_cause})
+	}@
+	action child("apply_polish").port("error") @{
+		setResult({error_cause = child("apply_polish").result.error_cause})
+	}@
+	action child("check_error").port("error") @{
+		setResult({error_cause = child("check_error").result.error_cause})
+	}@
+
+
+} where {
+	start_pose: nil;
+	width_value: nil;
+	loop_interval_value: nil;
+	speed_ratio: nil;
+	force_value: nil;
+	duration_value: nil;
+	speed: nil;
+}

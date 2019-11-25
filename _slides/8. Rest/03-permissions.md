@@ -154,7 +154,7 @@ class ExampleView(APIView):
         return Response(content)
 ```
 
-Note: it supports & (and), | (or) and ~ (not).
+Note: it supports & (and), | (or) and tilde (not).
 
 ---
 ### Permission classes 
@@ -391,6 +391,7 @@ True
 ---
 ### Checking permissions inside views (2)
 - get_objects_for_user: extract list of objects based on particular user
+
 ```
 from django.shortcuts import render
 from django.template import RequestContext
@@ -490,7 +491,7 @@ Django comes with excellent and widely used Admin application
 - it provides content management for Django applications
 - user with access to admin panel can manage users, groups, permissions and other data provided by system.
 
-use GuardedModelAdmin instead of standard django.contrib.admin.ModelAdmin class for registering models within the admin
+use GuardedModelAdmin instead of django.contrib.admin.ModelAdmin for registering models within admin
 
 ```
 from django.db import models
@@ -502,9 +503,7 @@ class Post(models.Model):
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
 
     class Meta:
-        permissions = (
-            ('hide_post', 'Can hide post'),
-        )
+        permissions = (('hide_post', 'Can hide post'))
         get_latest_by = 'created_at'
 
     def __str__(self):
@@ -513,7 +512,8 @@ class Post(models.Model):
     def get_absolute_url(self):
         return {'post_slug': self.slug}
 ```
-
+---
+### Admin integration (2)
 We want to register Post model within admin application
 ```
 from django.contrib import admin
